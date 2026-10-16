@@ -24,6 +24,39 @@ any module that exports an `AdminResource` appears in the panel. Server side: se
 from @core/rbac (`admin:access` + `<resource>:<action>`), CSRF protection on writes and an audit log of every change.
 Table: `admin_audit`.
 
+## Setup
+
+After `genpm add`, follow these steps (your AI agent finds the same steps in `src/lib/admin/AGENTS.md` and can do them for you):
+
+1. Install @core/auth, @core/rbac and @core/ui first; run migrations as in `src/lib/db/AGENTS.md` (`admin_audit`).
+2. Create `src/genpm/admin.ts`:
+   ```ts
+   import { defineAdmin, auditAdminResource } from '@/lib/admin';
+   import { mediaAdminResource } from '@/lib/media';
+   export const admin = defineAdmin({ title: 'My site', resources: [mediaAdminResource, auditAdminResource], widgets: [] });
+   ```
+   Every installed module's `AGENTS.md` says which resources to add here.
+3. API route. Next: `app/api/admin/[...path]/route.ts` →
+   `export const { GET, POST, PUT, DELETE } = adminRouteHandlers(admin); export const dynamic = 'force-dynamic';`
+   Hono: `app.route('/api/admin', adminRoutes(admin))`.
+4. Page. Next: `app/admin/[[...path]]/page.tsx` renders a client component that imports `../lib/ui/ui.css`,
+   `../lib/admin/admin.css` and returns `<AdminApp basePath="/admin" path={(await params).path?.join('/') ?? ''} />`.
+   Protect the page itself too (redirect to sign-in when there is no session) and add `robots: { index: false }`.
+5. Rich text, media pickers or blocks: pass `renderers={{ richText: MyEditorField, media: MyMediaPicker }}`.
+   Without them those fields fall back to a JSON textarea / relation select.
+6. Translate the UI with `labels={{ save: t('admin.save'), … }}` (keys: `defaultLabels`).
+7. Verify: a user without `admin:access` gets 403 on `/api/admin/schema`; an editor sees only their resources; an edit
+   creates a row in `admin_audit` with before/after.
+
+## What's inside
+
+Paths are relative to `src/lib/admin`.
+
+- `index.ts` — server API: `defineAdmin`, `handleAdminApi`, `adminContextFor`, `listAudit`, `auditAdminResource`, `countWidget`, `listWidget`, `fieldsFromZod`.
+- `client.ts` — `'use client'`: `AdminApp`, `createAdminApi`, `FieldControl`, `defaultLabels`, renderer types.
+- `admin.css` — layout on @core/ui tokens. `constants.ts` — `ADMIN_HEADER` (shared by server and client).
+- `adapters/hono.ts` — `adminRoutes(admin)`. `adapters/next.ts` — `adminRouteHandlers(admin)`.
+
 ## At a glance
 
 - **GenPM dependencies** (installed with it): [@core/db](https://genpm.net/p/@core/db), [@core/auth](https://genpm.net/p/@core/auth), [@core/rbac](https://genpm.net/p/@core/rbac), [@core/ui](https://genpm.net/p/@core/ui), [@core/contracts](https://genpm.net/p/@core/contracts)
